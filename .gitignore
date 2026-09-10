@@ -8,3 +8,4 @@ debug
 *.swp
 .DS_Store
 mnp-lab-cert.der
+mnp-lab-*.id

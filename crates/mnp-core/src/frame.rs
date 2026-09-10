@@ -19,6 +19,9 @@ pub enum MessageType {
     HelloAck = 0x02,
     ErrorFrame = 0x03,
     Goodbye = 0x04,
+    IdAnnounce = 0x10,
+    Challenge = 0x11,
+    Proof = 0x12,
 }
 
 impl TryFrom<u8> for MessageType {
@@ -30,6 +33,9 @@ impl TryFrom<u8> for MessageType {
             0x02 => Ok(Self::HelloAck),
             0x03 => Ok(Self::ErrorFrame),
             0x04 => Ok(Self::Goodbye),
+            0x10 => Ok(Self::IdAnnounce),
+            0x11 => Ok(Self::Challenge),
+            0x12 => Ok(Self::Proof),
             other => Err(FrameError::UnknownType(other)),
         }
     }
@@ -58,6 +64,15 @@ impl Frame {
             flags: 0,
             session: 0,
             payload: Vec::new(),
+        }
+    }
+
+    pub fn with_payload(ty: MessageType, payload: Vec<u8>) -> Self {
+        Self {
+            ty,
+            flags: 0,
+            session: 0,
+            payload,
         }
     }
 }

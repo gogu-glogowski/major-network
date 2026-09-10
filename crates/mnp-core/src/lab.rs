@@ -14,6 +14,10 @@ use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use thiserror::Error;
 
 use crate::frame::{Frame, FrameError, HEADER_LEN, MessageType, decode_header, encode};
+use crate::identity::{
+    Announce, Challenge, EXPORTER_LABEL, EXPORTER_LEN, IdentityError, IdentityKeys, KIND_HUMAN,
+    KIND_PEER, Proof, transcript, verify_proof,
+};
 use crate::{LAB_ALPN, LAB_SERVER_NAME};
 
 static CRYPTO: Once = Once::new();
@@ -53,6 +57,8 @@ pub enum LabError {
     UnexpectedType(MessageType, MessageType),
     #[error("frame: {0}")]
     Frame(#[from] FrameError),
+    #[error("identity: {0}")]
+    Identity(#[from] IdentityError),
     #[error("{0}")]
     Other(String),
 }
@@ -227,7 +233,9 @@ async fn read_frame(recv: &mut quinn::RecvStream) -> Result<Frame, LabError> {
 }
 
 /// Client: one bi-di stream, HELLO frame, HELLO_ACK frame. Stream stays open (no finish).
-pub async fn send_hello(conn: &quinn::Connection) -> Result<(), LabError> {
+pub async fn send_hello(
+    conn: &quinn::Connection,
+) -> Result<(quinn::SendStream, quinn::RecvStream), LabError> {
     reject_v4_mapped(conn.remote_address())?;
     let (mut send, mut recv) = conn.open_bi().await?;
     write_frame(&mut send, &Frame::empty(MessageType::Hello)).await?;
@@ -236,11 +244,13 @@ pub async fn send_hello(conn: &quinn::Connection) -> Result<(), LabError> {
         return Err(LabError::UnexpectedType(MessageType::HelloAck, ack.ty));
     }
     tracing::info!("received HELLO_ACK frame");
-    Ok(())
+    Ok((send, recv))
 }
 
 /// Server: one bi-di stream, read HELLO frame, write HELLO_ACK. Stream stays open.
-pub async fn accept_hello(conn: &quinn::Connection) -> Result<(), LabError> {
+pub async fn accept_hello(
+    conn: &quinn::Connection,
+) -> Result<(quinn::SendStream, quinn::RecvStream), LabError> {
     reject_v4_mapped(conn.remote_address())?;
     let (mut send, mut recv) = conn.accept_bi().await?;
     let hello = match read_frame(&mut recv).await {
@@ -255,6 +265,95 @@ pub async fn accept_hello(conn: &quinn::Connection) -> Result<(), LabError> {
     }
     tracing::info!("received HELLO frame");
     write_frame(&mut send, &Frame::empty(MessageType::HelloAck)).await?;
+    Ok((send, recv))
+}
+
+pub fn tls_exporter(conn: &quinn::Connection) -> Result<[u8; EXPORTER_LEN], LabError> {
+    let mut out = [0u8; EXPORTER_LEN];
+    conn.export_keying_material(&mut out, EXPORTER_LABEL, b"")
+        .map_err(|e| LabError::Other(format!("tls exporter: {e:?}")))?;
+    Ok(out)
+}
+
+async fn expect_type(recv: &mut quinn::RecvStream, ty: MessageType) -> Result<Frame, LabError> {
+    let frame = read_frame(recv).await?;
+    if frame.ty != ty {
+        return Err(LabError::UnexpectedType(ty, frame.ty));
+    }
+    Ok(frame)
+}
+
+/// Client identity: announce, challenge, proof. Fail closed.
+pub async fn client_identity(
+    send: &mut quinn::SendStream,
+    recv: &mut quinn::RecvStream,
+    keys: &IdentityKeys,
+    trust: &Announce,
+    exporter: &[u8; EXPORTER_LEN],
+) -> Result<(), LabError> {
+    let mine = keys.announce();
+    write_frame(
+        send,
+        &Frame::with_payload(MessageType::IdAnnounce, mine.encode().to_vec()),
+    )
+    .await?;
+    let theirs = Announce::decode(&expect_type(recv, MessageType::IdAnnounce).await?.payload)?;
+
+    let local_ch = Challenge::fresh();
+    write_frame(
+        send,
+        &Frame::with_payload(MessageType::Challenge, local_ch.encode().to_vec()),
+    )
+    .await?;
+    let remote_ch = Challenge::decode(&expect_type(recv, MessageType::Challenge).await?.payload)?;
+
+    let t = transcript(&mine, &theirs, &local_ch.nonce, &remote_ch.nonce, exporter);
+    let proof = keys.prove(&t);
+    write_frame(
+        send,
+        &Frame::with_payload(MessageType::Proof, proof.encode().to_vec()),
+    )
+    .await?;
+    let their_proof = Proof::decode(&expect_type(recv, MessageType::Proof).await?.payload)?;
+    verify_proof(&theirs, trust, KIND_PEER, &t, &their_proof)?;
+    tracing::info!("client identity verified");
+    Ok(())
+}
+
+/// Server identity: announce, challenge, proof. Fail closed.
+pub async fn server_identity(
+    send: &mut quinn::SendStream,
+    recv: &mut quinn::RecvStream,
+    keys: &IdentityKeys,
+    trust: &Announce,
+    exporter: &[u8; EXPORTER_LEN],
+) -> Result<(), LabError> {
+    let theirs = Announce::decode(&expect_type(recv, MessageType::IdAnnounce).await?.payload)?;
+    let mine = keys.announce();
+    write_frame(
+        send,
+        &Frame::with_payload(MessageType::IdAnnounce, mine.encode().to_vec()),
+    )
+    .await?;
+
+    let remote_ch = Challenge::decode(&expect_type(recv, MessageType::Challenge).await?.payload)?;
+    let local_ch = Challenge::fresh();
+    write_frame(
+        send,
+        &Frame::with_payload(MessageType::Challenge, local_ch.encode().to_vec()),
+    )
+    .await?;
+
+    let t = transcript(&theirs, &mine, &remote_ch.nonce, &local_ch.nonce, exporter);
+    let their_proof = Proof::decode(&expect_type(recv, MessageType::Proof).await?.payload)?;
+    verify_proof(&theirs, trust, KIND_HUMAN, &t, &their_proof)?;
+    let proof = keys.prove(&t);
+    write_frame(
+        send,
+        &Frame::with_payload(MessageType::Proof, proof.encode().to_vec()),
+    )
+    .await?;
+    tracing::info!("server identity verified");
     Ok(())
 }
 
@@ -287,9 +386,8 @@ mod tests {
                 session.on_hello_ok().expect("server hello");
                 assert_eq!(session.state(), crate::session::SessionState::Ready);
             }
-            // Do not drop the QUIC connection before the client reads ACK.
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            result
+            result.map(|_| ())
         });
 
         let mut session = crate::session::Session::new_lab();
@@ -300,9 +398,60 @@ mod tests {
             .await
             .expect("client handshake");
         session.on_quic_connected().expect("client quic");
-        send_hello(&conn).await.expect("HELLO/ACK");
+        let _streams = send_hello(&conn).await.expect("HELLO/ACK");
         session.on_hello_ok().expect("client hello");
         assert_eq!(session.state(), crate::session::SessionState::Ready);
         server_task.await.expect("join").expect("server HELLO");
+    }
+
+    #[tokio::test]
+    async fn mutual_ed25519_identity_over_quic() {
+        install_crypto_provider();
+        let cert = LabCert::mint().unwrap();
+        let client_keys = IdentityKeys::generate(KIND_HUMAN).unwrap();
+        let server_keys = IdentityKeys::generate(KIND_PEER).unwrap();
+        let client_ann = client_keys.announce();
+        let server_ann = server_keys.announce();
+
+        let server = server_endpoint("[::1]:0".parse().unwrap(), &cert).unwrap();
+        let addr = server.local_addr().unwrap();
+
+        let server_task = tokio::spawn(async move {
+            let mut session = crate::session::Session::new_fail_closed();
+            let incoming = server.accept().await.expect("incoming");
+            let conn = incoming.await.expect("hs");
+            session.on_quic_connected().unwrap();
+            let (mut send, mut recv) = accept_hello(&conn).await.unwrap();
+            session.on_hello_ok().unwrap();
+            assert_eq!(
+                session.state(),
+                crate::session::SessionState::IdentityPending
+            );
+            let exp = tls_exporter(&conn).unwrap();
+            server_identity(&mut send, &mut recv, &server_keys, &client_ann, &exp)
+                .await
+                .unwrap();
+            session.on_identity_ok().unwrap();
+            assert_eq!(session.state(), crate::session::SessionState::Ready);
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        });
+
+        let mut session = crate::session::Session::new_fail_closed();
+        let client = client_endpoint(&cert).unwrap();
+        let conn = client
+            .connect(addr, LAB_SERVER_NAME)
+            .unwrap()
+            .await
+            .unwrap();
+        session.on_quic_connected().unwrap();
+        let (mut send, mut recv) = send_hello(&conn).await.unwrap();
+        session.on_hello_ok().unwrap();
+        let exp = tls_exporter(&conn).unwrap();
+        client_identity(&mut send, &mut recv, &client_keys, &server_ann, &exp)
+            .await
+            .unwrap();
+        session.on_identity_ok().unwrap();
+        assert_eq!(session.state(), crate::session::SessionState::Ready);
+        server_task.await.unwrap();
     }
 }

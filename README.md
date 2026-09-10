@@ -19,18 +19,20 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 
 ## Stan
 
-v0.0.3: ramka `MNP1` + maszyna stanów z `LAB_AUTO_ACCEPT` (READY po HELLO, bez krypto). QUIC/TLS 1.3, wyłącznie IPv6, pin certu. To **nie** jest identity.
+v0.0.3 + identity lab: ramka `MNP1`, maszyna stanów, software Ed25519 mutual auth (fail closed gdy podasz plik trust). Bez 4. argumentu zostaje `LAB_AUTO_ACCEPT` (nie identity).
 
 ```text
 cargo test --workspace
 
-# dwa procesy (localhost IPv6)
+# dwa procesy, sam HELLO (LAB_AUTO_ACCEPT)
 cargo run -p mnp-server
-# inny terminal, ten sam katalog — pinuje mnp-lab-cert.der
 cargo run -p mnp-client
+
+# mutual auth: najpierw zapisz announce serwera, potem klienta z trust
+# (szczegóły: docs/IDENTITY.md)
 ```
 
-Następny krok: codec + live software-key mutual auth (fail closed).
+Następny krok: Nitrokey jako backend HumanIdentity (po researchu API).
 
 ## Co tu nie mieszka
 

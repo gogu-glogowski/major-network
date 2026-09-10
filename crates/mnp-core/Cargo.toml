@@ -9,7 +9,9 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+ed25519-dalek.workspace = true
 quinn.workspace = true
+rand.workspace = true
 rcgen.workspace = true
 rustls.workspace = true
 socket2.workspace = true

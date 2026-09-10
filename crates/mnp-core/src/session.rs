@@ -39,6 +39,14 @@ impl Session {
         }
     }
 
+    /// Fail closed: HELLO stops at IDENTITY_PENDING until `on_identity_ok`.
+    pub fn new_fail_closed() -> Self {
+        Self {
+            state: SessionState::Disconnected,
+            lab_auto_accept: false,
+        }
+    }
+
     pub fn state(&self) -> SessionState {
         self.state
     }
@@ -78,6 +86,19 @@ impl Session {
             )?;
         }
         Ok(())
+    }
+
+    pub fn on_identity_ok(&mut self) -> Result<(), SessionError> {
+        self.step(
+            SessionState::IdentityPending,
+            SessionState::Authenticated,
+            "identity",
+        )?;
+        self.step(
+            SessionState::Authenticated,
+            SessionState::Ready,
+            "authz_noop",
+        )
     }
 
     pub fn on_goodbye_or_loss(&mut self) {
@@ -132,6 +153,16 @@ mod tests {
         let mut s = Session::new_lab();
         s.on_quic_connected().unwrap();
         assert!(s.on_quic_connected().is_err());
+    }
+
+    #[test]
+    fn fail_closed_stops_at_identity_pending() {
+        let mut s = Session::new_fail_closed();
+        s.on_quic_connected().unwrap();
+        s.on_hello_ok().unwrap();
+        assert_eq!(s.state(), SessionState::IdentityPending);
+        s.on_identity_ok().unwrap();
+        assert_eq!(s.state(), SessionState::Ready);
     }
 
     #[test]

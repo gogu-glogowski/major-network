@@ -15,7 +15,9 @@ unsafe_code = "forbid"
 [workspace.dependencies]
 mnp-core = { path = "crates/mnp-core" }
 anyhow = "1"
+ed25519-dalek = { version = "2", features = ["rand_core", "std"] }
 quinn = "0.11"
+rand = "0.8"
 rcgen = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
 socket2 = "0.5"
