@@ -278,21 +278,31 @@ mod tests {
         reject_v4_mapped(addr).expect("listen addr is real IPv6");
 
         let server_task = tokio::spawn(async move {
+            let mut session = crate::session::Session::new_lab();
             let incoming = server.accept().await.expect("incoming");
             let conn = incoming.await.expect("server handshake");
+            session.on_quic_connected().expect("server quic");
             let result = accept_hello(&conn).await;
+            if result.is_ok() {
+                session.on_hello_ok().expect("server hello");
+                assert_eq!(session.state(), crate::session::SessionState::Ready);
+            }
             // Do not drop the QUIC connection before the client reads ACK.
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
             result
         });
 
+        let mut session = crate::session::Session::new_lab();
         let client = client_endpoint(&cert).expect("client bind");
         let conn = client
             .connect(addr, LAB_SERVER_NAME)
             .expect("start connect")
             .await
             .expect("client handshake");
+        session.on_quic_connected().expect("client quic");
         send_hello(&conn).await.expect("HELLO/ACK");
+        session.on_hello_ok().expect("client hello");
+        assert_eq!(session.state(), crate::session::SessionState::Ready);
         server_task.await.expect("join").expect("server HELLO");
     }
 }

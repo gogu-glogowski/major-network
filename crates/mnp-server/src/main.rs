@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use mnp_core::LAB_LISTEN;
 use mnp_core::lab::{LabCert, accept_hello, reject_v4_mapped, server_endpoint};
+use mnp_core::session::Session;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -43,11 +44,16 @@ async fn main() -> Result<()> {
 }
 
 async fn handle(incoming: quinn::Incoming) -> Result<()> {
+    let mut session = Session::new_lab();
     let conn = incoming.await.context("QUIC handshake")?;
     reject_v4_mapped(conn.remote_address())?;
+    session.on_quic_connected()?;
     tracing::info!(peer = %conn.remote_address(), "accepted");
     accept_hello(&conn).await?;
+    session.on_hello_ok()?;
+    tracing::info!(state = ?session.state(), "session ready (LAB_AUTO_ACCEPT)");
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), conn.closed()).await;
+    session.on_goodbye_or_loss();
     Ok(())
 }
 

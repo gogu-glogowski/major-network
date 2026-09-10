@@ -18,7 +18,7 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 
 ## Stan
 
-v0.0.2: ramka laboratoryjna `MNP1` w `mnp-core` (parser tylko tam). HELLO/HELLO_ACK jadą jako ramki po QUIC + TLS 1.3, wyłącznie IPv6. Lab cert jest pinowany (bez skip-verify). To **nie** jest identity.
+v0.0.3: ramka `MNP1` + maszyna stanów z `LAB_AUTO_ACCEPT` (READY po HELLO, bez krypto). QUIC/TLS 1.3, wyłącznie IPv6, pin certu. To **nie** jest identity.
 
 ```text
 cargo test --workspace
@@ -29,7 +29,7 @@ cargo run -p mnp-server
 cargo run -p mnp-client
 ```
 
-Następny krok wg Architecture v1: maszyna stanów v0.0.3 (`LAB_AUTO_ACCEPT`).
+Następny krok wg Architecture v1: specyfikacja identity (dokument, zanim kod proofu).
 
 ## Co tu nie mieszka
 

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use mnp_core::lab::{LabCert, client_endpoint, send_hello};
+use mnp_core::session::Session;
 use mnp_core::{LAB_LISTEN, LAB_SERVER_NAME};
 
 #[tokio::main]
@@ -25,13 +26,16 @@ async fn main() -> Result<()> {
     tracing::info!(addr = %connect, cert = %cert_path.display(), "mnp-client connecting");
 
     let endpoint = client_endpoint(&cert)?;
+    let mut session = Session::new_lab();
     let conn = endpoint
         .connect(connect, LAB_SERVER_NAME)
         .context("QUIC connect")?
         .await
         .context("QUIC handshake")?;
+    session.on_quic_connected()?;
     send_hello(&conn).await?;
-    tracing::info!("HELLO spike ok");
+    session.on_hello_ok()?;
+    tracing::info!(state = ?session.state(), "HELLO spike ok");
     endpoint.wait_idle().await;
     Ok(())
 }
