@@ -18,7 +18,7 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 
 ## Stan
 
-v0.0.1 spike: `HELLO MNP` / `HELLO ACK` po QUIC + TLS 1.3, wyłącznie IPv6. Lab cert jest pinowany (bez skip-verify). To **nie** jest identity.
+v0.0.2: ramka laboratoryjna `MNP1` w `mnp-core` (parser tylko tam). HELLO/HELLO_ACK jadą jako ramki po QUIC + TLS 1.3, wyłącznie IPv6. Lab cert jest pinowany (bez skip-verify). To **nie** jest identity.
 
 ```text
 cargo test --workspace
@@ -29,7 +29,7 @@ cargo run -p mnp-server
 cargo run -p mnp-client
 ```
 
-Następny krok wg Architecture v1: ramka v0.0.2 w `mnp-core`.
+Następny krok wg Architecture v1: maszyna stanów v0.0.3 (`LAB_AUTO_ACCEPT`).
 
 ## Co tu nie mieszka
 

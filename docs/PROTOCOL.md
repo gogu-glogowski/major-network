@@ -62,7 +62,7 @@ HELLO ACK
 
 v0.0.1 **może** `finish()` send stream po wymianie (one-shot). Od v0.0.2 stream żyje do `GOODBYE` / teardown QUIC.
 
-## v0.0.2 — ramka (jeszcze nie implementujemy)
+## v0.0.2 — ramka (zaimplementowana w `mnp-core::frame`)
 
 Szkic z Architecture v1. Parser wyłącznie w przyszłym `mnp-core`.
 

@@ -13,7 +13,8 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use thiserror::Error;
 
-use crate::{HELLO, HELLO_ACK, LAB_ALPN, LAB_SERVER_NAME};
+use crate::frame::{Frame, FrameError, HEADER_LEN, MessageType, decode_header, encode};
+use crate::{LAB_ALPN, LAB_SERVER_NAME};
 
 static CRYPTO: Once = Once::new();
 
@@ -48,10 +49,10 @@ pub enum LabError {
     ClosedStream(#[from] quinn::ClosedStream),
     #[error("quic read: {0}")]
     ReadClosed(String),
-    #[error("expected HELLO MNP, got {0:?}")]
-    UnexpectedHello(Vec<u8>),
-    #[error("expected HELLO ACK, got {0:?}")]
-    UnexpectedAck(Vec<u8>),
+    #[error("expected {0:?}, got {1:?}")]
+    UnexpectedType(MessageType, MessageType),
+    #[error("frame: {0}")]
+    Frame(#[from] FrameError),
     #[error("{0}")]
     Other(String),
 }
@@ -197,31 +198,63 @@ async fn read_exact(recv: &mut quinn::RecvStream, want: usize) -> Result<Vec<u8>
     Ok(buf)
 }
 
-/// Client: open one bi-di stream, write HELLO, finish, read HELLO ACK.
-pub async fn send_hello(conn: &quinn::Connection) -> Result<(), LabError> {
-    reject_v4_mapped(conn.remote_address())?;
-    let (mut send, mut recv) = conn.open_bi().await?;
-    send.write_all(HELLO).await?;
-    send.finish()?;
-    let buf = read_exact(&mut recv, HELLO_ACK.len()).await?;
-    if buf.as_slice() != HELLO_ACK {
-        return Err(LabError::UnexpectedAck(buf));
-    }
-    tracing::info!("received HELLO ACK");
+async fn write_frame(send: &mut quinn::SendStream, frame: &Frame) -> Result<(), LabError> {
+    let bytes = encode(frame)?;
+    send.write_all(&bytes).await?;
     Ok(())
 }
 
-/// Server: accept one bi-di stream, read HELLO, write HELLO ACK, finish.
+async fn read_frame(recv: &mut quinn::RecvStream) -> Result<Frame, LabError> {
+    let header_buf = read_exact(recv, HEADER_LEN).await?;
+    let header = match decode_header(&header_buf) {
+        Ok(h) => h,
+        Err(e @ FrameError::PayloadTooLarge(_)) => {
+            return Err(e.into());
+        }
+        Err(e) => return Err(e.into()),
+    };
+    let payload = if header.length == 0 {
+        Vec::new()
+    } else {
+        read_exact(recv, header.length as usize).await?
+    };
+    Ok(Frame {
+        ty: header.ty,
+        flags: header.flags,
+        session: header.session,
+        payload,
+    })
+}
+
+/// Client: one bi-di stream, HELLO frame, HELLO_ACK frame. Stream stays open (no finish).
+pub async fn send_hello(conn: &quinn::Connection) -> Result<(), LabError> {
+    reject_v4_mapped(conn.remote_address())?;
+    let (mut send, mut recv) = conn.open_bi().await?;
+    write_frame(&mut send, &Frame::empty(MessageType::Hello)).await?;
+    let ack = read_frame(&mut recv).await?;
+    if ack.ty != MessageType::HelloAck {
+        return Err(LabError::UnexpectedType(MessageType::HelloAck, ack.ty));
+    }
+    tracing::info!("received HELLO_ACK frame");
+    Ok(())
+}
+
+/// Server: one bi-di stream, read HELLO frame, write HELLO_ACK. Stream stays open.
 pub async fn accept_hello(conn: &quinn::Connection) -> Result<(), LabError> {
     reject_v4_mapped(conn.remote_address())?;
     let (mut send, mut recv) = conn.accept_bi().await?;
-    let buf = read_exact(&mut recv, HELLO.len()).await?;
-    if buf.as_slice() != HELLO {
-        return Err(LabError::UnexpectedHello(buf));
+    let hello = match read_frame(&mut recv).await {
+        Err(e @ LabError::Frame(FrameError::PayloadTooLarge(_))) => {
+            let _ = write_frame(&mut send, &Frame::empty(MessageType::ErrorFrame)).await;
+            return Err(e);
+        }
+        other => other?,
+    };
+    if hello.ty != MessageType::Hello {
+        return Err(LabError::UnexpectedType(MessageType::Hello, hello.ty));
     }
-    tracing::info!("received HELLO MNP");
-    send.write_all(HELLO_ACK).await?;
-    send.finish()?;
+    tracing::info!("received HELLO frame");
+    write_frame(&mut send, &Frame::empty(MessageType::HelloAck)).await?;
     Ok(())
 }
 
