@@ -1,0 +1,15 @@
+[package]
+name = "mnp-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "MNP lab server. v0.0.x accepts the connection."
+repository.workspace = true
+publish = false
+
+[dependencies]
+mnp-core.workspace = true
+
+[lints]
+workspace = true

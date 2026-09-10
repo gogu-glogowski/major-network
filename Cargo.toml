@@ -1,0 +1,16 @@
+[workspace]
+members = ["crates/mnp-core", "crates/mnp-client", "crates/mnp-server"]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "Apache-2.0"
+authors = ["Major"]
+repository = "https://github.com/gogu-glogowski/major-network"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.dependencies]
+mnp-core = { path = "crates/mnp-core" }

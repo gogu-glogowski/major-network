@@ -18,9 +18,13 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 
 ## Stan
 
-Na dziś: dokumentacja. Brak crate’ów, brak Quinn, brak sieci.
+Szkielet workspace v0.0.1 (PR 1). Crate’y: `mnp-core`, `mnp-client`, `mnp-server`. Jeszcze bez Quinn.
 
-Kolejny krok wg Architecture v1: szkielet workspace → spike `HELLO MNP` / `HELLO ACK` po QUIC/IPv6.
+Następny krok: spike `HELLO MNP` / `HELLO ACK` po QUIC/IPv6 (PR 2).
+
+```text
+cargo test --workspace
+```
 
 ## Co tu nie mieszka
 
