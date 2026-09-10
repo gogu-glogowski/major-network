@@ -922,9 +922,9 @@ Poniższe **nie są zamknięte**, chyba że oznaczone jako RESOLVED. Stałe labo
 5. **Zakres Observera** — lista z czatu jest wstępna i może zostać zawężona albo rozszerzona. Nie ma freeze.
 6. **Kiedy policy sprawi, że `READY` przestanie być no-op** — stany `AUTHENTICATED` i `READY` **zostają** (potwierdzone; nie scalamy). Język policy i model uprawnień human+device→peer/usługa nadal otwarte. Aż do PR 10 przejście jest no-op.
 7. **~~Czy „MNP to VPN”~~ — RESOLVED.** MNP **nie jest VPN-em**. Protokół aplikacyjny / identity-aware access layer, nie overlay WireGuard/Tailscale. → Key Decision 18.
-8. **Prymitywy MNP Identity Crypto** — krzywe, podpisy, kody, anti-replay (nonce/ttl), wiązanie proofu z sesją QUIC. Najpierw model dowodu, potem algorytm. Zamyka to PR dokumentacyjny identity, nie Architecture v1.
+8. **~~Prymitywy MNP Identity Crypto~~ — RESOLVED.** Ed25519, nonce 32 B, TLS 1.3 exporter `EXPORTER-MNP-Identity`. → [`IDENTITY.md`](IDENTITY.md).
 9. **Token ALPN (produkcja)** — własny ALPN jest kierunkiem spike’u; `mnp-lab/0` jest throwaway. Dokładny identyfikator produkcyjny nieustalony.
-10. **Dokładna sekwencja komunikatów identity** — czat ma zarówno skrót `HELLO → CHALLENGE → SIGNED PROOF → AUTHENTICATED`, jak i bogatszy wariant z `SERVER_ID` / `DEVICE_ID`. Nie scalone tutaj. Zamyka to PR dokumentacyjny identity.
+10. **~~Dokładna sekwencja komunikatów identity~~ — RESOLVED.** `HELLO` → `ID_ANNOUNCE` → `CHALLENGE` → `PROOF` (wzajemnie). → [`IDENTITY.md`](IDENTITY.md).
 11. **Relacja `SESSION` (8 B) ↔ QUIC Connection ID** — czy MNP trzyma własne ID, czy tylko wozi metadane. Czy potrzebny jest kryptograficznie wyprowadzony identyfikator sesji (nadal **nie** czwarte pryncypium). Przez v0.0.3 pole jest w ramce i wynosi `0`; ten dokument **nie** wprowadza allocatora.
 12. **Port, ULA vs. link-local vs. `::1`, discovery peera** — v0.0.1 może hardcodować adres; discovery nie istnieje.
 13. **Store kluczy software** — ścieżki, uprawnienia plików, format; nie projektujemy keystore’u w tym dokumencie.

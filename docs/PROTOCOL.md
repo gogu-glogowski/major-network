@@ -91,15 +91,9 @@ Nagłówek: 20 B.
 
 Nie `finish()` po HELLO: pętla nagłówek + payload.
 
-## Identity (nie w v0.0.1)
+## Identity
 
-Docelowy skrót z czatu, **nie scalony** z wariantem `SERVER_ID` / `DEVICE_ID`:
-
-```text
-HELLO → CHALLENGE → SIGNED PROOF (później Nitrokey) → AUTHENTICATED
-```
-
-Prymitywy, sekwencja i wiązanie z sesją QUIC/TLS: osobny dokument identity, nie ten plik.
+Spec: [`IDENTITY.md`](IDENTITY.md). Typy ramek `0x10`–`0x12`. Fail closed, bez `LAB_AUTO_ACCEPT` na tej ścieżce.
 
 ## Stack (przypomnienie)
 

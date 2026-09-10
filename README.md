@@ -13,7 +13,8 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 | Plik | Co to jest |
 |------|------------|
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture v1 — stack, identity, non-goals, Key Decisions, PR Plan |
-| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | kontrakt laboratoryjny v0.0.1 (HELLO) i throwaway stałe v0.0.2 |
+| [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | kontrakt laboratoryjny ramek |
+| [`docs/IDENTITY.md`](docs/IDENTITY.md) | software mutual auth: Ed25519, sekwencja, TLS exporter |
 | [`LICENSE`](LICENSE) | Apache-2.0 jako **tymczasowy** default laboratoryjny (decyzja prawna otwarta) |
 
 ## Stan
@@ -29,7 +30,7 @@ cargo run -p mnp-server
 cargo run -p mnp-client
 ```
 
-Następny krok wg Architecture v1: specyfikacja identity (dokument, zanim kod proofu).
+Następny krok: codec + live software-key mutual auth (fail closed).
 
 ## Co tu nie mieszka
 
