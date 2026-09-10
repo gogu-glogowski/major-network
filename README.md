@@ -18,13 +18,18 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 
 ## Stan
 
-Szkielet workspace v0.0.1 (PR 1). Crate’y: `mnp-core`, `mnp-client`, `mnp-server`. Jeszcze bez Quinn.
-
-Następny krok: spike `HELLO MNP` / `HELLO ACK` po QUIC/IPv6 (PR 2).
+v0.0.1 spike: `HELLO MNP` / `HELLO ACK` po QUIC + TLS 1.3, wyłącznie IPv6. Lab cert jest pinowany (bez skip-verify). To **nie** jest identity.
 
 ```text
 cargo test --workspace
+
+# dwa procesy (localhost IPv6)
+cargo run -p mnp-server
+# inny terminal, ten sam katalog — pinuje mnp-lab-cert.der
+cargo run -p mnp-client
 ```
+
+Następny krok wg Architecture v1: ramka v0.0.2 w `mnp-core`.
 
 ## Co tu nie mieszka
 

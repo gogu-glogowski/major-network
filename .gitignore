@@ -7,3 +7,4 @@ debug
 .vscode/
 *.swp
 .DS_Store
+mnp-lab-cert.der

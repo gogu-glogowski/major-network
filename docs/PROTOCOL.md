@@ -47,7 +47,7 @@ Token produkcyjny: Open Question.
 3. Klient **pinuje** ten cert / mini-CA (plik obok binarek albo stdout serwera).
 4. Zakaz skip-verify na ścieżce mylonej z MNP identity.
 5. 0-RTT off.
-6. Provider rustls (`ring` / `aws-lc-rs`) wybierany przy pierwszym kodzie, nie tutaj.
+6. Provider rustls: **`aws-lc-rs`** (default Quinn 0.11). Lab-only.
 
 To **nie** jest `HumanIdentity` / `DeviceIdentity` / `PeerIdentity`.
 

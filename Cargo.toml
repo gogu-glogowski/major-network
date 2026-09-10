@@ -14,3 +14,12 @@ unsafe_code = "forbid"
 
 [workspace.dependencies]
 mnp-core = { path = "crates/mnp-core" }
+anyhow = "1"
+quinn = "0.11"
+rcgen = "0.13"
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std"] }
+socket2 = "0.5"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-util", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -2,6 +2,8 @@
 //!
 //! v0.0.1: raw ASCII HELLO on a QUIC stream. No framing yet.
 
+pub mod lab;
+
 /// Laboratory ALPN. Throwaway, not a v1 contract.
 pub const LAB_ALPN: &[u8] = b"mnp-lab/0";
 
@@ -13,3 +15,6 @@ pub const HELLO_ACK: &[u8] = b"HELLO ACK";
 
 /// TLS server name used with the lab certificate (SAN DNS: localhost).
 pub const LAB_SERVER_NAME: &str = "localhost";
+
+/// Default lab listen address. IPv6 loopback, not a v1 port allocation.
+pub const LAB_LISTEN: &str = "[::1]:4433";
