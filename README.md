@@ -15,6 +15,7 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Architecture v1 — stack, identity, non-goals, Key Decisions, PR Plan |
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | kontrakt laboratoryjny ramek |
 | [`docs/IDENTITY.md`](docs/IDENTITY.md) | software mutual auth: Ed25519, sekwencja, TLS exporter |
+| [`docs/SZKOLENIE-SIEC.md`](docs/SZKOLENIE-SIEC.md) | reverse proxy, CGNAT Netii, ASUS, NFC |
 | [`LICENSE`](LICENSE) | Apache-2.0 jako **tymczasowy** default laboratoryjny (decyzja prawna otwarta) |
 
 ## Stan
