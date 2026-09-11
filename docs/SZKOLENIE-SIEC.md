@@ -2,7 +2,7 @@
 
 Notatka z rozmowy (lab MNP). Nie jest konfiguracją routera. Nic tu nie otwieramy na świat.
 
-Prawdopodobne sprostowanie: **„cgrant” = CGNAT** (Carrier-Grade NAT), nie komputer w LAN. Pasuje do: „nigdy tego nie konfigurowałem”, „wiem od paru tygodni”, „WireGuard miał problem”, „Tailscale sobie radzi”, „za Netią na 100%”. Gdyby to jednak była nazwa hosta — poprawić tę notatkę.
+**Potwierdzone:** „cgrant” było pomyłką. Chodzi o **CGNAT Netii**, nie o host. Nie ma w tej sieci maszyny o nazwie cgrant.
 
 ---
 
@@ -111,7 +111,25 @@ UX z telefonu: przyłóż NFC **raz** na sesję + timeout (jak sudo), nie przy k
 
 ---
 
-## 5. Jak to spiąć z MNP (kolejność, bez roboty teraz)
+## 5. Potencjał MNP na *tej* sieci (LAN ASUS + Netia/CGNAT)
+
+MNP **nie wygra** z Tailscale’em w „dwa NATy mają się polubić”. Tailscale ma relay; MNP go nie ma i nie powinien udawać VPN-u (KD 18).
+
+Gdzie **ma** potencjał u Ciebie:
+
+1. **LAN ASUS (kabel/Wi-Fi)** — telefon/Mac → CachyOS. CGNAT nie istnieje. Nitrokey + `GRANT ssh` to drzwi do usługi, nie tunel całej siatki. Lab `[::1]` jest prototypem właśnie tego, tylko na jednym pudle.
+2. **Tożsamość człowieka na żelazie** — Tailscale klei urządzenia; MNP klei *Major + ten laptop + ta usługa*. Drugi token NFC = drugi wpis człowieka, nie magiczny mesh.
+3. **IPv6, jeśli Netia kiedyś da** — Architecture v1 jest IPv6-only nie z fanaberii. CGNAT to choroba IPv4. Dwa globalne IPv6 = telefon LTE → dom bez forwardu na ASUS-ie.
+4. **Wychodzący klient z CachyOS** — przez ASUS i CGNAT, jak przeglądarka. Peer musi być osiągalny (VPS / IPv6 / ktoś kto już słucha). Netia tego nie wiesza.
+
+Gdzie **nie** ma potencjału bez zmiany gry:
+
+- `mnp-server` w domu + telefon na LTE przez IPv4 = ten sam mur co WireGuard. Forward na ASUS-ie nie przebije CGNAT.
+- Zamiana Tailscale na MNP „żeby wszędzie działało”. To inny produkt.
+
+Słodki punkt: **domowy access z tożsamością**, Tailscale (albo IPv6) na „jestem poza domem”, MNP nie udaje overlayu.
+
+## 6. Jak to spiąć z MNP (kolejność, bez roboty teraz)
 
 1. Lab zostaje na localhost — świadomie, CGNAT nie obchodzi `[::1]`.
 2. Reverse-proxy mental model: `GRANT ssh` → TCP do `sshd`, nie tunel LAN.
