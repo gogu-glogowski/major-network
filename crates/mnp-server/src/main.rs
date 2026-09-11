@@ -4,10 +4,11 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use mnp_core::LAB_LISTEN;
+use mnp_core::access::Policy;
 use mnp_core::identity::{Announce, IdentityKeys, KIND_PEER};
 use mnp_core::lab::{
-    LabCert, accept_hello, accept_observer_report, reject_v4_mapped, server_endpoint,
-    server_identity, tls_exporter,
+    LabCert, accept_echo, accept_hello, accept_observer_report, decide_access, reject_v4_mapped,
+    server_endpoint, server_identity, tls_exporter,
 };
 use mnp_core::session::Session;
 
@@ -81,10 +82,15 @@ async fn handle(
     session.on_hello_ok()?;
     if let Some(trust) = trust {
         let exp = tls_exporter(&conn)?;
-        server_identity(&mut send, &mut recv, keys.as_ref(), trust.as_ref(), &exp).await?;
+        let who =
+            server_identity(&mut send, &mut recv, keys.as_ref(), trust.as_ref(), &exp).await?;
         session.on_identity_ok()?;
         let snap = accept_observer_report(&conn).await?;
         tracing::info!(hostname = %snap.hostname, os = %snap.os, "observer");
+        let policy = Policy::lab_echo_for(&who);
+        decide_access(&mut send, &mut recv, &policy, &who).await?;
+        session.on_access_granted()?;
+        accept_echo(&conn).await?;
     }
     tracing::info!(state = ?session.state(), "session ready");
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), conn.closed()).await;

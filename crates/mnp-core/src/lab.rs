@@ -13,6 +13,10 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use rustls::{ClientConfig, RootCertStore, ServerConfig};
 use thiserror::Error;
 
+use crate::access::{
+    AccessError, ECHO_PING, ECHO_PONG, Policy, ServiceId, decode_grant, decode_request,
+    encode_deny, encode_grant, encode_request,
+};
 use crate::frame::{Frame, FrameError, HEADER_LEN, MessageType, decode_header, encode};
 use crate::identity::{
     Announce, Challenge, EXPORTER_LABEL, EXPORTER_LEN, IdentityBackend, IdentityError, KIND_HUMAN,
@@ -62,6 +66,8 @@ pub enum LabError {
     Identity(#[from] IdentityError),
     #[error("observer: {0}")]
     Observer(#[from] ObserverError),
+    #[error("access: {0}")]
+    Access(#[from] AccessError),
     #[error("{0}")]
     Other(String),
 }
@@ -330,7 +336,7 @@ pub async fn server_identity(
     keys: &impl IdentityBackend,
     trust: &Announce,
     exporter: &[u8; EXPORTER_LEN],
-) -> Result<(), LabError> {
+) -> Result<Announce, LabError> {
     let theirs = Announce::decode(&expect_type(recv, MessageType::IdAnnounce).await?.payload)?;
     let mine = keys.announce();
     write_frame(
@@ -357,7 +363,7 @@ pub async fn server_identity(
     )
     .await?;
     tracing::info!("server identity verified");
-    Ok(())
+    Ok(theirs)
 }
 
 /// Logical OBSERVER stream: client opens a second bi-di stream. No pinned stream id.
@@ -386,6 +392,91 @@ pub async fn accept_observer_report(conn: &quinn::Connection) -> Result<Snapshot
     write_frame(&mut send, &Frame::empty(MessageType::ObserverAck)).await?;
     tracing::info!(hostname = %snap.hostname, "observer report received");
     Ok(snap)
+}
+
+/// Same control stream as identity. No extra Nitrokey prompt.
+pub async fn request_access(
+    send: &mut quinn::SendStream,
+    recv: &mut quinn::RecvStream,
+    service: ServiceId,
+) -> Result<(), LabError> {
+    write_frame(
+        send,
+        &Frame::with_payload(MessageType::AccessRequest, encode_request(service)),
+    )
+    .await?;
+    let frame = read_frame(recv).await?;
+    match frame.ty {
+        MessageType::AccessGrant => {
+            let got = decode_grant(&frame.payload)?;
+            if got != service {
+                return Err(LabError::UnexpectedType(MessageType::AccessGrant, frame.ty));
+            }
+            tracing::info!(?service, "access granted");
+            Ok(())
+        }
+        MessageType::AccessDeny => Err(decode_request(&frame.payload)
+            .map(AccessError::Denied)
+            .unwrap_or(AccessError::BadPayload)
+            .into()),
+        other => Err(LabError::UnexpectedType(MessageType::AccessGrant, other)),
+    }
+}
+
+pub async fn decide_access(
+    send: &mut quinn::SendStream,
+    recv: &mut quinn::RecvStream,
+    policy: &Policy,
+    who: &Announce,
+) -> Result<ServiceId, LabError> {
+    let req = expect_type(recv, MessageType::AccessRequest).await?;
+    let service = decode_request(&req.payload)?;
+    if policy.allows(who, service) {
+        write_frame(
+            send,
+            &Frame::with_payload(MessageType::AccessGrant, encode_grant(service)),
+        )
+        .await?;
+        tracing::info!(?service, "access granted");
+        Ok(service)
+    } else {
+        write_frame(
+            send,
+            &Frame::with_payload(MessageType::AccessDeny, encode_deny(service, 1)),
+        )
+        .await?;
+        Err(AccessError::Denied(service).into())
+    }
+}
+
+pub async fn send_echo(conn: &quinn::Connection) -> Result<(), LabError> {
+    let (mut send, mut recv) = conn.open_bi().await?;
+    write_frame(
+        &mut send,
+        &Frame::with_payload(MessageType::Data, ECHO_PING.to_vec()),
+    )
+    .await?;
+    let reply = expect_type(&mut recv, MessageType::Data).await?;
+    if reply.payload != ECHO_PONG {
+        return Err(LabError::Other("echo mismatch".into()));
+    }
+    tracing::info!("echo pong");
+    Ok(())
+}
+
+pub async fn accept_echo(conn: &quinn::Connection) -> Result<(), LabError> {
+    let (mut send, mut recv) = conn.accept_bi().await?;
+    let data = expect_type(&mut recv, MessageType::Data).await?;
+    if data.payload != ECHO_PING {
+        return Err(LabError::Other("echo mismatch".into()));
+    }
+    write_frame(
+        &mut send,
+        &Frame::with_payload(MessageType::Data, ECHO_PONG.to_vec()),
+    )
+    .await?;
+    tracing::info!("echo ping");
+    Ok(())
 }
 
 #[cfg(test)]
@@ -464,9 +555,16 @@ mod tests {
                 .await
                 .unwrap();
             session.on_identity_ok().unwrap();
-            assert_eq!(session.state(), crate::session::SessionState::Ready);
+            assert_eq!(session.state(), crate::session::SessionState::Authenticated);
             let snap = accept_observer_report(&conn).await.unwrap();
             assert_eq!(snap.hostname, "lab-client");
+            let policy = Policy::lab_echo_for(&client_ann);
+            decide_access(&mut send, &mut recv, &policy, &client_ann)
+                .await
+                .unwrap();
+            session.on_access_granted().unwrap();
+            assert_eq!(session.state(), crate::session::SessionState::Ready);
+            accept_echo(&conn).await.unwrap();
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         });
 
@@ -485,7 +583,7 @@ mod tests {
             .await
             .unwrap();
         session.on_identity_ok().unwrap();
-        assert_eq!(session.state(), crate::session::SessionState::Ready);
+        assert_eq!(session.state(), crate::session::SessionState::Authenticated);
         let snap = crate::observer::Snapshot {
             hostname: "lab-client".into(),
             os: "linux-x86_64".into(),
@@ -493,6 +591,12 @@ mod tests {
             ipv6: vec![],
         };
         send_observer_report(&conn, &snap).await.unwrap();
+        request_access(&mut send, &mut recv, ServiceId::Echo)
+            .await
+            .unwrap();
+        session.on_access_granted().unwrap();
+        assert_eq!(session.state(), crate::session::SessionState::Ready);
+        send_echo(&conn).await.unwrap();
         server_task.await.unwrap();
     }
 }

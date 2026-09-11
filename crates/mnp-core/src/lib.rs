@@ -2,6 +2,7 @@
 //!
 //! v0.0.2: laboratory binary frames on one QUIC bi-di stream.
 
+pub mod access;
 pub mod frame;
 pub mod identity;
 pub mod lab;

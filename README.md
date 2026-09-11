@@ -19,7 +19,7 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 
 ## Stan
 
-v0.0.3 + identity + Observer + Nitrokey OpenPGP jako HumanIdentity.
+v0.0.3 + identity + Observer + Service Access (`echo` po policy) + Nitrokey OpenPGP jako HumanIdentity. `READY` dopiero po `ACCESS_GRANT`.
 
 ```text
 cargo test --workspace

@@ -24,6 +24,10 @@ pub enum MessageType {
     Proof = 0x12,
     ObserverReport = 0x20,
     ObserverAck = 0x21,
+    AccessRequest = 0x30,
+    AccessGrant = 0x31,
+    AccessDeny = 0x32,
+    Data = 0x40,
 }
 
 impl TryFrom<u8> for MessageType {
@@ -40,6 +44,10 @@ impl TryFrom<u8> for MessageType {
             0x12 => Ok(Self::Proof),
             0x20 => Ok(Self::ObserverReport),
             0x21 => Ok(Self::ObserverAck),
+            0x30 => Ok(Self::AccessRequest),
+            0x31 => Ok(Self::AccessGrant),
+            0x32 => Ok(Self::AccessDeny),
+            0x40 => Ok(Self::Data),
             other => Err(FrameError::UnknownType(other)),
         }
     }

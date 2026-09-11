@@ -93,11 +93,15 @@ impl Session {
             SessionState::IdentityPending,
             SessionState::Authenticated,
             "identity",
-        )?;
+        )
+    }
+
+    /// Policy granted a service. AUTHENTICATED → READY is no longer a no-op.
+    pub fn on_access_granted(&mut self) -> Result<(), SessionError> {
         self.step(
             SessionState::Authenticated,
             SessionState::Ready,
-            "authz_noop",
+            "access_grant",
         )
     }
 
@@ -162,6 +166,8 @@ mod tests {
         s.on_hello_ok().unwrap();
         assert_eq!(s.state(), SessionState::IdentityPending);
         s.on_identity_ok().unwrap();
+        assert_eq!(s.state(), SessionState::Authenticated);
+        s.on_access_granted().unwrap();
         assert_eq!(s.state(), SessionState::Ready);
     }
 

@@ -95,6 +95,10 @@ Nie `finish()` po HELLO: pętla nagłówek + payload.
 
 Spec: [`IDENTITY.md`](IDENTITY.md). Typy ramek `0x10`–`0x12`. Fail closed. Human na kliencie: Nitrokey OpenPGP gdy karta jest w USB (PIN + dotyk przy `PROOF`).
 
+## Service Access
+
+Spec: [`ACCESS.md`](ACCESS.md). `AUTHENTICATED → READY` wymaga `ACCESS_GRANT` (`echo` w labie). PIN/dotyk tylko przy `PROOF`.
+
 ## Observer MVP
 
 Moduł aplikacyjny, nie warstwa na przewodzie. Tylko po identity READY. Klient otwiera **drugi** strumień bi-di (bez pinowania stream ID).
