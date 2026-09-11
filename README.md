@@ -16,6 +16,7 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 | [`docs/PROTOCOL.md`](docs/PROTOCOL.md) | kontrakt laboratoryjny ramek |
 | [`docs/IDENTITY.md`](docs/IDENTITY.md) | software mutual auth: Ed25519, sekwencja, TLS exporter |
 | [`docs/SZKOLENIE-SIEC.md`](docs/SZKOLENIE-SIEC.md) | reverse proxy, CGNAT Netii, ASUS, NFC |
+| [`docs/IPV6.md`](docs/IPV6.md) | test IPv6 na tym hoście; dziś tylko link-local |
 | [`LICENSE`](LICENSE) | Apache-2.0 jako **tymczasowy** default laboratoryjny (decyzja prawna otwarta) |
 
 ## Stan
@@ -32,6 +33,9 @@ cargo run -p mnp-client
 # mutual auth + PIN/dotyk (po HELLO, gdy są już *.id)
 ./scripts/lab-server-auth    # terminal 1
 ./scripts/lab-client-auth    # terminal 2
+
+# czy jest GUA/ULA (poza ::1)
+./scripts/check-ipv6
 ```
 
 ## Co tu nie mieszka

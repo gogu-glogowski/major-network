@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# Probe IPv6 for MNP v1. No router changes. Exit 0 = GUA or ULA present.
+set -euo pipefail
+
+echo "=== adresy ==="
+ip -6 addr show
+
+echo
+echo "=== trasa domyślna v6 ==="
+if ip -6 route show default | grep -q .; then
+  ip -6 route show default
+else
+  echo "(brak)"
+fi
+
+echo
+echo "=== ping Google DNS v6 ==="
+if ping -6 -c 2 -W 2 2001:4860:4860::8888; then
+  echo "ping6: OK"
+else
+  echo "ping6: FAIL (to normalne przy samym fe80::)"
+fi
+
+echo
+echo "=== ipify ==="
+echo -n "v4: "
+curl -4 -s -m 5 https://api.ipify.org || echo "(brak)"
+echo
+echo -n "v6: "
+curl -6 -s -m 5 https://api64.ipify.org || echo "(brak / brak GUA)"
+echo
+
+gua=$(ip -6 addr show scope global | grep -c 'inet6 2' || true)
+ula=$(ip -6 addr show scope global | grep -c 'inet6 fd' || true)
+ll=$(ip -6 addr show scope link | grep -c 'inet6 fe80' || true)
+
+echo "=== werdykt ==="
+echo "link-local fe80: $ll   ULA fd: $ula   GUA 2xxx: $gua"
+
+if [[ "$gua" -gt 0 ]]; then
+  echo "GUA jest — można testować MNP poza LAN i (jeśli peer też ma GUA) z LTE."
+  exit 0
+fi
+if [[ "$ula" -gt 0 ]]; then
+  echo "ULA jest — MNP w LAN ASUS (Wi-Fi ↔ kabel) ma szansę. Świat/LTE nadal nie."
+  exit 0
+fi
+if [[ "$ll" -gt 0 ]]; then
+  echo "Tylko link-local. ASUS/Netia nie dają IPv6. Lab [::1] działa; dwa hosty — nie."
+  exit 2
+fi
+echo "Brak IPv6 na interfejsach."
+exit 1
