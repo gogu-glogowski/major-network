@@ -19,20 +19,19 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 
 ## Stan
 
-v0.0.3 + identity + Observer MVP. Po wzajemnym Ed25519 klient wysyła snapshot hosta na drugim strumieniu QUIC. Nitrokey: stub, `connect()` = błąd.
+v0.0.3 + identity + Observer + Nitrokey OpenPGP jako HumanIdentity.
 
 ```text
 cargo test --workspace
 
-# dwa procesy, sam HELLO (LAB_AUTO_ACCEPT)
+# sam HELLO (bez tożsamości)
 cargo run -p mnp-server
 cargo run -p mnp-client
 
-# mutual auth: najpierw zapisz announce serwera, potem klienta z trust
-# (szczegóły: docs/IDENTITY.md)
+# mutual auth + PIN/dotyk (po HELLO, gdy są już *.id)
+./scripts/lab-server-auth    # terminal 1
+./scripts/lab-client-auth    # terminal 2
 ```
-
-`mnp-client` przy wpiętym Nitrokey używa OpenPGP na karcie jako HumanIdentity (PIN + palec przy PROOF). Device zostaje kluczem programowym w `mnp-lab-client.device`.
 
 ## Co tu nie mieszka
 
