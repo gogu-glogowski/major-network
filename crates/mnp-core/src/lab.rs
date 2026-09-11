@@ -314,7 +314,7 @@ pub async fn client_identity(
     let proof = keys.prove(&t)?;
     write_frame(
         send,
-        &Frame::with_payload(MessageType::Proof, proof.encode().to_vec()),
+        &Frame::with_payload(MessageType::Proof, proof.encode()?),
     )
     .await?;
     let their_proof = Proof::decode(&expect_type(recv, MessageType::Proof).await?.payload)?;
@@ -353,7 +353,7 @@ pub async fn server_identity(
     let proof = keys.prove(&t)?;
     write_frame(
         send,
-        &Frame::with_payload(MessageType::Proof, proof.encode().to_vec()),
+        &Frame::with_payload(MessageType::Proof, proof.encode()?),
     )
     .await?;
     tracing::info!("server identity verified");

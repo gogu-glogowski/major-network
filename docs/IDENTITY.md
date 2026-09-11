@@ -10,7 +10,7 @@ Trzy pryncypia, osobne klucze:
 
 | Pryncypium | Lab software | Później |
 |------------|--------------|---------|
-| `HumanIdentity` | klucz Ed25519 (stand-in) | Nitrokey 3A Mini (PoP) |
+| `HumanIdentity` | klucz Ed25519 (stand-in) **albo** Nitrokey 3A Mini OpenPGP | token: prywatny na karcie |
 | `DeviceIdentity` | klucz Ed25519 maszyny | ten sam model, inny klucz |
 | `PeerIdentity` | klucz Ed25519 serwera/routera | ten sam model |
 
@@ -33,7 +33,7 @@ Mutual auth: obie strony muszą zweryfikować obie pary kluczy drugiej strony. B
 | Hash transkryptu | SHA-256 tylko jako składanka pól (pola są już stałej długości; podpis idzie na kanoniczny bufor, nie na „własny szyfr”) | |
 | AEAD / własna krzywa / MCE | **zakazane** na tej ścieżce | Kerckhoffs; MCE zostaje osobnym torem edukacyjnym |
 
-Nitrokey później podpisuje ten sam transkrypt jako backend `HumanIdentity`. Nie zmienia sekwencji.
+Nitrokey 3A Mini (OpenPGP, GPG): podpisuje **ten sam transkrypt** jako `HumanIdentity`. To nie jest surowy 64 B Ed25519 — to **OpenPGP detach-sign** (PIN + dotyk). Device i Peer zostają surowym Ed25519. Sekwencja ramek się nie zmienia.
 
 ## Sekwencja (OQ 10)
 
@@ -62,7 +62,7 @@ Nowe `TYPE` w ramce v0.0.2 (payload laboratoryjny):
 |------|--------|---------|
 | `0x10` | `ID_ANNOUNCE` | `kind:u8` + `device_pk:32` + `principal_pk:32` |
 | `0x11` | `CHALLENGE` | `nonce:32` |
-| `0x12` | `PROOF` | `device_sig:64` + `principal_sig:64` |
+| `0x12` | `PROOF` | `device_sig:64` + `u16le principal_len` + `principal_sig` (64 B Ed25519 **albo** OpenPGP) |
 
 `kind`: `1` = human (klient), `3` = peer (serwer). Device nie ma osobnego kind — zawsze pole `device_pk`.
 

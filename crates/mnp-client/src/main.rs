@@ -2,10 +2,11 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use mnp_core::identity::{Announce, IdentityKeys, KIND_HUMAN};
+use mnp_core::identity::{Announce, IdentityBackend, IdentityKeys, KIND_HUMAN};
 use mnp_core::lab::{
     LabCert, client_endpoint, client_identity, send_hello, send_observer_report, tls_exporter,
 };
+use mnp_core::nitrokey::Nitrokey3AMini;
 use mnp_core::observer::Snapshot;
 use mnp_core::session::Session;
 use mnp_core::{LAB_LISTEN, LAB_SERVER_NAME};
@@ -29,8 +30,24 @@ async fn main() -> Result<()> {
 
     let cert = LabCert::read_der(&cert_path)
         .with_context(|| format!("pin lab cert {}", cert_path.display()))?;
-    let keys = IdentityKeys::generate(KIND_HUMAN)?;
-    std::fs::write(&id_out, keys.announce().encode())?;
+    let device_seed = PathBuf::from("mnp-lab-client.device");
+    let nitro = Nitrokey3AMini::connect(&device_seed);
+    if let Ok(ref nk) = nitro {
+        tracing::info!("human identity = Nitrokey 3 OpenPGP (PIN + touch on prove)");
+        std::fs::write(&id_out, nk.announce().encode())?;
+    } else {
+        tracing::warn!(
+            "Nitrokey unavailable ({}); software human key",
+            nitro.as_ref().err().unwrap()
+        );
+    }
+    let software = if nitro.is_err() {
+        let keys = IdentityKeys::generate(KIND_HUMAN)?;
+        std::fs::write(&id_out, keys.announce().encode())?;
+        Some(keys)
+    } else {
+        None
+    };
     tracing::info!(id = %id_out.display(), "wrote client identity announce");
 
     let mut session = if trust_path.is_some() {
@@ -53,7 +70,18 @@ async fn main() -> Result<()> {
     if let Some(path) = trust_path {
         let trust = Announce::decode(&std::fs::read(&path)?)?;
         let exp = tls_exporter(&conn)?;
-        client_identity(&mut send, &mut recv, &keys, &trust, &exp).await?;
+        if let Some(keys) = software.as_ref() {
+            client_identity(&mut send, &mut recv, keys, &trust, &exp).await?;
+        } else {
+            client_identity(
+                &mut send,
+                &mut recv,
+                nitro.as_ref().expect("nitro"),
+                &trust,
+                &exp,
+            )
+            .await?;
+        }
         session.on_identity_ok()?;
         send_observer_report(&conn, &Snapshot::from_host()).await?;
     }

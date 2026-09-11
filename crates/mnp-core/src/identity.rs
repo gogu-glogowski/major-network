@@ -12,7 +12,7 @@ pub const PK_LEN: usize = 32;
 pub const SIG_LEN: usize = 64;
 pub const NONCE_LEN: usize = 32;
 pub const ANNOUNCE_LEN: usize = 1 + PK_LEN + PK_LEN;
-pub const PROOF_LEN: usize = SIG_LEN + SIG_LEN;
+/// Minimum PROOF size: device Ed25519 + u16 length + principal sig.
 pub const EXPORTER_LEN: usize = 32;
 pub const EXPORTER_LABEL: &[u8] = b"EXPORTER-MNP-Identity";
 const DOMAIN: &[u8] = b"MNP-IDENTITY-V0";
@@ -35,8 +35,10 @@ pub enum IdentityError {
     BadPublicKey,
     #[error("signature failed")]
     BadSignature,
-    #[error("hardware identity backend unavailable (Nitrokey API not wired)")]
-    HardwareUnavailable,
+    #[error("hardware identity backend unavailable: {0}")]
+    HardwareUnavailable(String),
+    #[error("gpg: {0}")]
+    Gpg(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -100,24 +102,34 @@ impl Challenge {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Proof {
     pub device_sig: [u8; SIG_LEN],
-    pub principal_sig: [u8; SIG_LEN],
+    /// Software: 64-byte raw Ed25519. Nitrokey human: OpenPGP detach-sign bytes.
+    pub principal_sig: Vec<u8>,
 }
 
 impl Proof {
-    pub fn encode(&self) -> [u8; PROOF_LEN] {
-        let mut out = [0u8; PROOF_LEN];
-        out[..SIG_LEN].copy_from_slice(&self.device_sig);
-        out[SIG_LEN..].copy_from_slice(&self.principal_sig);
-        out
+    pub fn encode(&self) -> Result<Vec<u8>, IdentityError> {
+        let len = u16::try_from(self.principal_sig.len())
+            .map_err(|_| IdentityError::BadProof(self.principal_sig.len()))?;
+        let mut out = Vec::with_capacity(SIG_LEN + 2 + self.principal_sig.len());
+        out.extend_from_slice(&self.device_sig);
+        out.extend_from_slice(&len.to_le_bytes());
+        out.extend_from_slice(&self.principal_sig);
+        Ok(out)
     }
 
     pub fn decode(buf: &[u8]) -> Result<Self, IdentityError> {
-        if buf.len() != PROOF_LEN {
+        if buf.len() < SIG_LEN + 2 {
+            return Err(IdentityError::BadProof(buf.len()));
+        }
+        let device_sig: [u8; SIG_LEN] = buf[..SIG_LEN].try_into().expect("sig");
+        let len = u16::from_le_bytes(buf[SIG_LEN..SIG_LEN + 2].try_into().expect("u16")) as usize;
+        let rest = &buf[SIG_LEN + 2..];
+        if rest.len() != len {
             return Err(IdentityError::BadProof(buf.len()));
         }
         Ok(Self {
-            device_sig: buf[..SIG_LEN].try_into().expect("sig"),
-            principal_sig: buf[SIG_LEN..].try_into().expect("sig"),
+            device_sig,
+            principal_sig: rest.to_vec(),
         })
     }
 }
@@ -172,7 +184,7 @@ impl IdentityKeys {
         let principal_sig = self.principal.sign(transcript).to_bytes();
         Proof {
             device_sig,
-            principal_sig,
+            principal_sig: principal_sig.to_vec(),
         }
     }
 }
@@ -198,19 +210,6 @@ impl IdentityBackend for IdentityKeys {
     }
 }
 
-/// Placeholder until 3A Mini API (PIV / OpenPGP / FIDO2) is chosen.
-#[derive(Debug)]
-pub struct Nitrokey3AMini {
-    _private: (),
-}
-
-impl Nitrokey3AMini {
-    /// No silent software stand-in. Refuses until real token code exists.
-    pub fn connect() -> Result<Self, IdentityError> {
-        Err(IdentityError::HardwareUnavailable)
-    }
-}
-
 pub fn verify_proof(
     announce: &Announce,
     trust: &Announce,
@@ -229,14 +228,19 @@ pub fn verify_proof(
     let principal = VerifyingKey::from_bytes(&announce.principal_pk)
         .map_err(|_| IdentityError::BadPublicKey)?;
     let ds = Signature::from_bytes(&proof.device_sig);
-    let ps = Signature::from_bytes(&proof.principal_sig);
     device
         .verify(transcript, &ds)
         .map_err(|_| IdentityError::BadSignature)?;
-    principal
-        .verify(transcript, &ps)
-        .map_err(|_| IdentityError::BadSignature)?;
-    Ok(())
+    if proof.principal_sig.len() == SIG_LEN {
+        let ps: [u8; SIG_LEN] = proof.principal_sig.as_slice().try_into().expect("sig");
+        let ps = Signature::from_bytes(&ps);
+        principal
+            .verify(transcript, &ps)
+            .map_err(|_| IdentityError::BadSignature)?;
+        Ok(())
+    } else {
+        crate::nitrokey::verify_openpgp(transcript, &proof.principal_sig, &announce.principal_pk)
+    }
 }
 
 #[cfg(test)]
@@ -296,10 +300,12 @@ mod tests {
     }
 
     #[test]
-    fn nitrokey_connect_refuses_without_hardware() {
-        assert_eq!(
-            crate::nitrokey::Nitrokey3AMini::connect().unwrap_err(),
-            IdentityError::HardwareUnavailable
-        );
+    fn proof_length_prefixed_round_trip() {
+        let p = Proof {
+            device_sig: [7; 64],
+            principal_sig: vec![1, 2, 3, 4],
+        };
+        let decoded = Proof::decode(&p.encode().unwrap()).unwrap();
+        assert_eq!(decoded, p);
     }
 }

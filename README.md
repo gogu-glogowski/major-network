@@ -32,7 +32,7 @@ cargo run -p mnp-client
 # (szczegóły: docs/IDENTITY.md)
 ```
 
-Następny krok: Nitrokey 3A Mini jako prawdziwy `IdentityBackend` (teraz `connect()` odmawia, bez fałszywego podpisu).
+`mnp-client` przy wpiętym Nitrokey używa OpenPGP na karcie jako HumanIdentity (PIN + palec przy PROOF). Device zostaje kluczem programowym w `mnp-lab-client.device`.
 
 ## Co tu nie mieszka
 

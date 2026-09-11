@@ -93,7 +93,7 @@ Nie `finish()` po HELLO: pętla nagłówek + payload.
 
 ## Identity
 
-Spec: [`IDENTITY.md`](IDENTITY.md). Typy ramek `0x10`–`0x12`. Fail closed, bez `LAB_AUTO_ACCEPT` na tej ścieżce.
+Spec: [`IDENTITY.md`](IDENTITY.md). Typy ramek `0x10`–`0x12`. Fail closed. Human na kliencie: Nitrokey OpenPGP gdy karta jest w USB (PIN + dotyk przy `PROOF`).
 
 ## Observer MVP
 
