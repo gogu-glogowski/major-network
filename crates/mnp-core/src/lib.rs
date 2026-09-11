@@ -5,6 +5,8 @@
 pub mod frame;
 pub mod identity;
 pub mod lab;
+pub mod nitrokey;
+pub mod observer;
 pub mod session;
 
 /// Laboratory ALPN. Throwaway, not a v1 contract.

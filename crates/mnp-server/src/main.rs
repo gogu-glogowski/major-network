@@ -6,7 +6,8 @@ use anyhow::{Context, Result};
 use mnp_core::LAB_LISTEN;
 use mnp_core::identity::{Announce, IdentityKeys, KIND_PEER};
 use mnp_core::lab::{
-    LabCert, accept_hello, reject_v4_mapped, server_endpoint, server_identity, tls_exporter,
+    LabCert, accept_hello, accept_observer_report, reject_v4_mapped, server_endpoint,
+    server_identity, tls_exporter,
 };
 use mnp_core::session::Session;
 
@@ -80,8 +81,10 @@ async fn handle(
     session.on_hello_ok()?;
     if let Some(trust) = trust {
         let exp = tls_exporter(&conn)?;
-        server_identity(&mut send, &mut recv, &keys, &trust, &exp).await?;
+        server_identity(&mut send, &mut recv, keys.as_ref(), trust.as_ref(), &exp).await?;
         session.on_identity_ok()?;
+        let snap = accept_observer_report(&conn).await?;
+        tracing::info!(hostname = %snap.hostname, os = %snap.os, "observer");
     }
     tracing::info!(state = ?session.state(), "session ready");
     let _ = tokio::time::timeout(std::time::Duration::from_secs(5), conn.closed()).await;

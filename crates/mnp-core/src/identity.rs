@@ -35,6 +35,8 @@ pub enum IdentityError {
     BadPublicKey,
     #[error("signature failed")]
     BadSignature,
+    #[error("hardware identity backend unavailable (Nitrokey API not wired)")]
+    HardwareUnavailable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -175,6 +177,40 @@ impl IdentityKeys {
     }
 }
 
+/// Signing backend for MNP identity. Software keys now; Nitrokey later.
+pub trait IdentityBackend: Send + Sync {
+    fn kind(&self) -> u8;
+    fn announce(&self) -> Announce;
+    fn prove(&self, transcript: &[u8]) -> Result<Proof, IdentityError>;
+}
+
+impl IdentityBackend for IdentityKeys {
+    fn kind(&self) -> u8 {
+        self.kind
+    }
+
+    fn announce(&self) -> Announce {
+        IdentityKeys::announce(self)
+    }
+
+    fn prove(&self, transcript: &[u8]) -> Result<Proof, IdentityError> {
+        Ok(IdentityKeys::prove(self, transcript))
+    }
+}
+
+/// Placeholder until 3A Mini API (PIV / OpenPGP / FIDO2) is chosen.
+#[derive(Debug)]
+pub struct Nitrokey3AMini {
+    _private: (),
+}
+
+impl Nitrokey3AMini {
+    /// No silent software stand-in. Refuses until real token code exists.
+    pub fn connect() -> Result<Self, IdentityError> {
+        Err(IdentityError::HardwareUnavailable)
+    }
+}
+
 pub fn verify_proof(
     announce: &Announce,
     trust: &Announce,
@@ -257,5 +293,13 @@ mod tests {
             Announce::decode(&[0; 8]),
             Err(IdentityError::BadAnnounce(8))
         ));
+    }
+
+    #[test]
+    fn nitrokey_connect_refuses_without_hardware() {
+        assert_eq!(
+            crate::nitrokey::Nitrokey3AMini::connect().unwrap_err(),
+            IdentityError::HardwareUnavailable
+        );
     }
 }

@@ -3,7 +3,10 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use mnp_core::identity::{Announce, IdentityKeys, KIND_HUMAN};
-use mnp_core::lab::{LabCert, client_endpoint, client_identity, send_hello, tls_exporter};
+use mnp_core::lab::{
+    LabCert, client_endpoint, client_identity, send_hello, send_observer_report, tls_exporter,
+};
+use mnp_core::observer::Snapshot;
 use mnp_core::session::Session;
 use mnp_core::{LAB_LISTEN, LAB_SERVER_NAME};
 
@@ -52,6 +55,7 @@ async fn main() -> Result<()> {
         let exp = tls_exporter(&conn)?;
         client_identity(&mut send, &mut recv, &keys, &trust, &exp).await?;
         session.on_identity_ok()?;
+        send_observer_report(&conn, &Snapshot::from_host()).await?;
     }
     tracing::info!(state = ?session.state(), "client done");
     endpoint.wait_idle().await;

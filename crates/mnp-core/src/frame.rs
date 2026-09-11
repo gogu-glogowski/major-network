@@ -22,6 +22,8 @@ pub enum MessageType {
     IdAnnounce = 0x10,
     Challenge = 0x11,
     Proof = 0x12,
+    ObserverReport = 0x20,
+    ObserverAck = 0x21,
 }
 
 impl TryFrom<u8> for MessageType {
@@ -36,6 +38,8 @@ impl TryFrom<u8> for MessageType {
             0x10 => Ok(Self::IdAnnounce),
             0x11 => Ok(Self::Challenge),
             0x12 => Ok(Self::Proof),
+            0x20 => Ok(Self::ObserverReport),
+            0x21 => Ok(Self::ObserverAck),
             other => Err(FrameError::UnknownType(other)),
         }
     }

@@ -15,9 +15,10 @@ use thiserror::Error;
 
 use crate::frame::{Frame, FrameError, HEADER_LEN, MessageType, decode_header, encode};
 use crate::identity::{
-    Announce, Challenge, EXPORTER_LABEL, EXPORTER_LEN, IdentityError, IdentityKeys, KIND_HUMAN,
+    Announce, Challenge, EXPORTER_LABEL, EXPORTER_LEN, IdentityBackend, IdentityError, KIND_HUMAN,
     KIND_PEER, Proof, transcript, verify_proof,
 };
+use crate::observer::{ObserverError, Snapshot};
 use crate::{LAB_ALPN, LAB_SERVER_NAME};
 
 static CRYPTO: Once = Once::new();
@@ -59,6 +60,8 @@ pub enum LabError {
     Frame(#[from] FrameError),
     #[error("identity: {0}")]
     Identity(#[from] IdentityError),
+    #[error("observer: {0}")]
+    Observer(#[from] ObserverError),
     #[error("{0}")]
     Other(String),
 }
@@ -287,7 +290,7 @@ async fn expect_type(recv: &mut quinn::RecvStream, ty: MessageType) -> Result<Fr
 pub async fn client_identity(
     send: &mut quinn::SendStream,
     recv: &mut quinn::RecvStream,
-    keys: &IdentityKeys,
+    keys: &impl IdentityBackend,
     trust: &Announce,
     exporter: &[u8; EXPORTER_LEN],
 ) -> Result<(), LabError> {
@@ -308,7 +311,7 @@ pub async fn client_identity(
     let remote_ch = Challenge::decode(&expect_type(recv, MessageType::Challenge).await?.payload)?;
 
     let t = transcript(&mine, &theirs, &local_ch.nonce, &remote_ch.nonce, exporter);
-    let proof = keys.prove(&t);
+    let proof = keys.prove(&t)?;
     write_frame(
         send,
         &Frame::with_payload(MessageType::Proof, proof.encode().to_vec()),
@@ -324,7 +327,7 @@ pub async fn client_identity(
 pub async fn server_identity(
     send: &mut quinn::SendStream,
     recv: &mut quinn::RecvStream,
-    keys: &IdentityKeys,
+    keys: &impl IdentityBackend,
     trust: &Announce,
     exporter: &[u8; EXPORTER_LEN],
 ) -> Result<(), LabError> {
@@ -347,7 +350,7 @@ pub async fn server_identity(
     let t = transcript(&theirs, &mine, &remote_ch.nonce, &local_ch.nonce, exporter);
     let their_proof = Proof::decode(&expect_type(recv, MessageType::Proof).await?.payload)?;
     verify_proof(&theirs, trust, KIND_HUMAN, &t, &their_proof)?;
-    let proof = keys.prove(&t);
+    let proof = keys.prove(&t)?;
     write_frame(
         send,
         &Frame::with_payload(MessageType::Proof, proof.encode().to_vec()),
@@ -357,9 +360,38 @@ pub async fn server_identity(
     Ok(())
 }
 
+/// Logical OBSERVER stream: client opens a second bi-di stream. No pinned stream id.
+pub async fn send_observer_report(
+    conn: &quinn::Connection,
+    snap: &Snapshot,
+) -> Result<(), LabError> {
+    reject_v4_mapped(conn.remote_address())?;
+    let (mut send, mut recv) = conn.open_bi().await?;
+    write_frame(
+        &mut send,
+        &Frame::with_payload(MessageType::ObserverReport, snap.encode()?),
+    )
+    .await?;
+    let _ = expect_type(&mut recv, MessageType::ObserverAck).await?;
+    tracing::info!(hostname = %snap.hostname, addrs = snap.ipv6.len(), "observer report acked");
+    Ok(())
+}
+
+/// Server accepts the next bi-di stream as OBSERVER. Call only after identity READY.
+pub async fn accept_observer_report(conn: &quinn::Connection) -> Result<Snapshot, LabError> {
+    reject_v4_mapped(conn.remote_address())?;
+    let (mut send, mut recv) = conn.accept_bi().await?;
+    let frame = expect_type(&mut recv, MessageType::ObserverReport).await?;
+    let snap = Snapshot::decode(&frame.payload)?;
+    write_frame(&mut send, &Frame::empty(MessageType::ObserverAck)).await?;
+    tracing::info!(hostname = %snap.hostname, "observer report received");
+    Ok(snap)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::identity::IdentityKeys;
 
     #[test]
     fn bind_rejects_ipv4() {
@@ -433,6 +465,8 @@ mod tests {
                 .unwrap();
             session.on_identity_ok().unwrap();
             assert_eq!(session.state(), crate::session::SessionState::Ready);
+            let snap = accept_observer_report(&conn).await.unwrap();
+            assert_eq!(snap.hostname, "lab-client");
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         });
 
@@ -452,6 +486,13 @@ mod tests {
             .unwrap();
         session.on_identity_ok().unwrap();
         assert_eq!(session.state(), crate::session::SessionState::Ready);
+        let snap = crate::observer::Snapshot {
+            hostname: "lab-client".into(),
+            os: "linux-x86_64".into(),
+            uptime: std::time::Duration::from_secs(1),
+            ipv6: vec![],
+        };
+        send_observer_report(&conn, &snap).await.unwrap();
         server_task.await.unwrap();
     }
 }

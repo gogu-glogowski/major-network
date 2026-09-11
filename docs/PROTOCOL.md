@@ -95,6 +95,17 @@ Nie `finish()` po HELLO: pętla nagłówek + payload.
 
 Spec: [`IDENTITY.md`](IDENTITY.md). Typy ramek `0x10`–`0x12`. Fail closed, bez `LAB_AUTO_ACCEPT` na tej ścieżce.
 
+## Observer MVP
+
+Moduł aplikacyjny, nie warstwa na przewodzie. Tylko po identity READY. Klient otwiera **drugi** strumień bi-di (bez pinowania stream ID).
+
+| TYPE | Nazwa |
+|------|--------|
+| `0x20` | `OBSERVER_REPORT` |
+| `0x21` | `OBSERVER_ACK` |
+
+Payload reportu v1: hostname, OS, uptime, adresy IPv6 + nazwa interfejsu. Zakres nie zamrożony.
+
 ## Stack (przypomnienie)
 
 ```text

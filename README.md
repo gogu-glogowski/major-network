@@ -19,7 +19,7 @@ Zamknięte decyzje z czatu [Major's Protocol](https://chatgpt.com/share/6aa31c30
 
 ## Stan
 
-v0.0.3 + identity lab: ramka `MNP1`, maszyna stanów, software Ed25519 mutual auth (fail closed gdy podasz plik trust). Bez 4. argumentu zostaje `LAB_AUTO_ACCEPT` (nie identity).
+v0.0.3 + identity + Observer MVP. Po wzajemnym Ed25519 klient wysyła snapshot hosta na drugim strumieniu QUIC. Nitrokey: stub, `connect()` = błąd.
 
 ```text
 cargo test --workspace
@@ -32,7 +32,7 @@ cargo run -p mnp-client
 # (szczegóły: docs/IDENTITY.md)
 ```
 
-Następny krok: Nitrokey jako backend HumanIdentity (po researchu API).
+Następny krok: Nitrokey 3A Mini jako prawdziwy `IdentityBackend` (teraz `connect()` odmawia, bez fałszywego podpisu).
 
 ## Co tu nie mieszka
 
